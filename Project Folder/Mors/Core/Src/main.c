@@ -55,7 +55,7 @@ TIM_HandleTypeDef htim7;
 /* USER CODE BEGIN PV */
 char *morscode[]={"._","_...","_._.","_..",".",".._.","__.","....","..",".___","_._","._..","__","_.","___",".__.","__._","._.","...","_",".._","..._",".__","_.._","_.__","__..",".____","..___","...__","...._",".....","_....","__...","___..","____.","_____"};
 char *symbols[]={"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","1","2","3","4","5","6","7","8","9","0"};
-char coded[5], coded_save[5];
+char coded[6], coded_save[6];
 char *decoded[1];
 uint32_t press_time;
 int press,bounce,done;
@@ -106,9 +106,9 @@ void mors(uint32_t timer)
 }
 void mors_blink()
 {
-	if(done||press==4)
+	if(done||press==5)
 	{
-		if(press==4)
+		if(press==5)
 			done=1;
 		CDC_Transmit_FS((uint8_t*)*decoded, strlen(*decoded));
 		press=0;
@@ -116,7 +116,7 @@ void mors_blink()
 			coded[i]='\0';
 		HAL_GPIO_WritePin(GPIOD, LD5_Pin,0);
 		HAL_GPIO_WritePin(GPIOD, LD6_Pin,0);
-		for(int i=0;i<4;i++)
+		for(int i=0;i<5;i++)
 		{
 			switch(coded_save[i])
 			{
@@ -535,7 +535,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		{//falling edge
 			press_time=TIM7->CNT;
 	        HAL_GPIO_WritePin(GPIOD, LD4_Pin,0);
-	        if(press<4)
+	        if(press<5)
 	        	mors(press_time);
 	        decoder();
 			TIM7->CNT=0;
