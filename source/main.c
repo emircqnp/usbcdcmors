@@ -58,7 +58,7 @@ char *symbols[]={"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"
 char coded[6], coded_save[6];
 char *decoded[1];
 uint32_t press_time;
-int press,bounce,done;
+int press,bounce,done,start;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -75,6 +75,10 @@ static void MX_TIM7_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void delay(int unit)
+{
+	for(int x=0x3*unit*0xFDEAF;x!=0;x--){}
+}
 void decoder()
 {
 	if(coded[0]!='\0')
@@ -89,14 +93,14 @@ void decoder()
 }
 void mors(uint32_t timer)
 {
-	if(timer < 700)
+	if(250 < timer && timer < 700)
 	{
 		HAL_GPIO_WritePin(GPIOD, LD6_Pin,1);
 		HAL_GPIO_WritePin(GPIOD, LD5_Pin,0);
 		coded[press]=dot;
 		press++;
 	}
-	else
+	else if(699 < timer)
 	{
 		HAL_GPIO_WritePin(GPIOD, LD6_Pin,0);
 		HAL_GPIO_WritePin(GPIOD, LD5_Pin,1);
@@ -106,38 +110,37 @@ void mors(uint32_t timer)
 }
 void mors_blink()
 {
-	if(done||press==5)
+	if((done||press==5)&&start)
 	{
-		if(press==5)
-			done=1;
 		CDC_Transmit_FS((uint8_t*)*decoded, strlen(*decoded));
-		press=0;
-		for(int i=0;i<4;i++)
+		for(int i=0;i<5;i++)
 			coded[i]='\0';
 		HAL_GPIO_WritePin(GPIOD, LD5_Pin,0);
 		HAL_GPIO_WritePin(GPIOD, LD6_Pin,0);
-		for(int i=0;i<5;i++)
+		for(int i=0;coded_save[i]!='\0';i++)
 		{
 			switch(coded_save[i])
 			{
 			  	case dot:
 		  	  			HAL_GPIO_WritePin(GPIOD, LD3_Pin, 1);
-		  	  			HAL_Delay(500);
+		  	  			delay(0x1);
 			  	  		HAL_GPIO_WritePin(GPIOD, LD3_Pin, 0);
-			  	  		HAL_Delay(500);
+			  	  		delay(0x1);
 			  	  		break;
 			  	 case dash:
 						  HAL_GPIO_WritePin(GPIOD, LD3_Pin, 1);
-						  HAL_Delay(1500);
+						  delay(0x3);
 					      HAL_GPIO_WritePin(GPIOD, LD3_Pin, 0);
-						  HAL_Delay(1500);
+						  delay(0x3);
 						  break;
 			  	 default:
 			  	  		 break;
 			}
 		}
-		HAL_Delay(500);
+		delay(0x1);
+		press=0;
 	}
+	done=0;
 }
 
 /* USER CODE END 0 */
@@ -184,7 +187,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  mors_blink();
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -361,7 +364,7 @@ static void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
   htim6.Init.Prescaler = 48000;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 500;
+  htim6.Init.Period = 650;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
@@ -497,7 +500,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : letterdone_Pin */
   GPIO_InitStruct.Pin = letterdone_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(letterdone_GPIO_Port, &GPIO_InitStruct);
 
@@ -522,6 +525,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	HAL_TIM_Base_Start_IT(&htim6);
 	if(GPIO_Pin==B1_Pin)
 	{
+		start=1;
+		HAL_GPIO_WritePin(GPIOD, LD5_Pin,0);
+		HAL_GPIO_WritePin(GPIOD, LD6_Pin,0);
 		if(HAL_GPIO_ReadPin(GPIOA, B1_Pin))
 		{//rising edge
 			HAL_NVIC_DisableIRQ(EXTI0_IRQn);
@@ -533,18 +539,27 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		}
 		else
 		{//falling edge
+			HAL_NVIC_DisableIRQ(EXTI0_IRQn);
+			bounce=1;
 			press_time=TIM7->CNT;
 	        HAL_GPIO_WritePin(GPIOD, LD4_Pin,0);
 	        if(press<5)
 	        	mors(press_time);
+	        else
+	        	mors_blink();
 	        decoder();
 			TIM7->CNT=0;
 		}
 	}
 	if(GPIO_Pin==letterdone_Pin)
 	{
-		done=1;
-		decoder();
+		if(!(HAL_GPIO_ReadPin(GPIOD, letterdone_Pin)));
+		{
+			done=1;
+			decoder();
+			mors_blink();
+			start=0;
+		}
 	}
 }
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
